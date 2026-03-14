@@ -20,6 +20,7 @@ const controlButtons = document.querySelectorAll("[data-direction]");
 let state = createInitialState();
 let audioContext;
 let soundEnabled = true;
+let audioUnlockAttempted = false;
 
 function getAudioContext() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -38,6 +39,25 @@ function getAudioContext() {
   return audioContext;
 }
 
+function unlockAudio() {
+  if (audioUnlockAttempted) {
+    return;
+  }
+
+  audioUnlockAttempted = true;
+  const context = getAudioContext();
+
+  if (!context) {
+    return;
+  }
+
+  if (context.state !== "running") {
+    context.resume().catch(() => {
+      audioUnlockAttempted = false;
+    });
+  }
+}
+
 function playTone({ frequency, duration, type = "square", volume = 0.04, delay = 0 }) {
   if (!soundEnabled) {
     return;
@@ -45,6 +65,13 @@ function playTone({ frequency, duration, type = "square", volume = 0.04, delay =
 
   const context = getAudioContext();
   if (!context) {
+    return;
+  }
+
+  if (context.state !== "running") {
+    context.resume().then(() => {
+      playTone({ frequency, duration, type, volume, delay });
+    }).catch(() => {});
     return;
   }
 
@@ -56,9 +83,9 @@ function playTone({ frequency, duration, type = "square", volume = 0.04, delay =
   oscillator.type = type;
   oscillator.frequency.setValueAtTime(frequency, startTime);
 
-  gainNode.gain.setValueAtTime(0.0001, startTime);
-  gainNode.gain.exponentialRampToValueAtTime(volume, startTime + 0.01);
-  gainNode.gain.exponentialRampToValueAtTime(0.0001, endTime);
+  gainNode.gain.setValueAtTime(0, startTime);
+  gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.01);
+  gainNode.gain.linearRampToValueAtTime(0, endTime);
 
   oscillator.connect(gainNode);
   gainNode.connect(context.destination);
@@ -223,6 +250,7 @@ function handleRestart() {
 }
 
 document.addEventListener("keydown", (event) => {
+  unlockAudio();
   const key = event.key.toLowerCase();
 
   if (key === "arrowup" || key === "w") {
@@ -260,6 +288,8 @@ document.addEventListener("keydown", (event) => {
     handleRestart();
   }
 });
+
+document.addEventListener("pointerdown", unlockAudio, { passive: true });
 
 pauseButton.addEventListener("click", handlePauseToggle);
 
