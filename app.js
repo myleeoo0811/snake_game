@@ -1,6 +1,5 @@
 import {
   BOARD_SIZE,
-  TICK_MS,
   createInitialState,
   occupiesCell,
   queueDirection,
@@ -11,16 +10,77 @@ import {
 
 const boardElement = document.querySelector("#board");
 const scoreElement = document.querySelector("#score");
+const bestScoreElement = document.querySelector("#best-score");
 const statusElement = document.querySelector("#status");
 const pauseButton = document.querySelector("#pause-button");
 const restartButton = document.querySelector("#restart-button");
 const soundButton = document.querySelector("#sound-button");
+const difficultySelect = document.querySelector("#difficulty-select");
+const overlayElement = document.querySelector("#overlay");
+const overlayLabelElement = document.querySelector("#overlay-label");
+const overlayTitleElement = document.querySelector("#overlay-title");
+const overlayTextElement = document.querySelector("#overlay-text");
+const overlayButton = document.querySelector("#overlay-button");
 const controlButtons = document.querySelectorAll("[data-direction]");
 
-let state = createInitialState();
+const STORAGE_KEYS = {
+  bestScore: "snake-best-score",
+  soundEnabled: "snake-sound-enabled",
+  difficulty: "snake-difficulty",
+};
+
+const DIFFICULTY_LEVELS = {
+  easy: { label: "Easy", tickMs: 180 },
+  normal: { label: "Normal", tickMs: 140 },
+  hard: { label: "Hard", tickMs: 95 },
+};
+
 let audioContext;
-let soundEnabled = true;
+let soundEnabled = loadStoredBoolean(STORAGE_KEYS.soundEnabled, true);
 let audioUnlockAttempted = false;
+let bestScore = loadStoredNumber(STORAGE_KEYS.bestScore, 0);
+let difficulty = loadStoredDifficulty();
+let tickHandle;
+let touchStartX = 0;
+let touchStartY = 0;
+let state = createInitialState();
+
+function loadStoredNumber(key, fallback) {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === null ? fallback : Number(value) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function loadStoredBoolean(key, fallback) {
+  try {
+    const value = window.localStorage.getItem(key);
+    if (value === null) {
+      return fallback;
+    }
+
+    return value === "true";
+  } catch {
+    return fallback;
+  }
+}
+
+function loadStoredDifficulty() {
+  try {
+    const value = window.localStorage.getItem(STORAGE_KEYS.difficulty);
+    return DIFFICULTY_LEVELS[value] ? value : "normal";
+  } catch {
+    return "normal";
+  }
+}
+
+function saveSetting(key, value) {
+  try {
+    window.localStorage.setItem(key, String(value));
+  } catch {}
+}
 
 function getAudioContext() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -180,10 +240,20 @@ function render() {
   }
 
   scoreElement.textContent = String(state.score);
+  if (state.score > bestScore) {
+    bestScore = state.score;
+    saveSetting(STORAGE_KEYS.bestScore, bestScore);
+  }
+
+  bestScoreElement.textContent = String(bestScore);
   statusElement.textContent = formatStatus(state.status);
   pauseButton.textContent = state.status === "paused" ? "Resume" : "Pause";
+  pauseButton.disabled = state.status === "ready" || state.status === "game-over";
   soundButton.textContent = soundEnabled ? "Sound On" : "Sound Off";
   soundButton.setAttribute("aria-pressed", String(soundEnabled));
+  difficultySelect.value = difficulty;
+  difficultySelect.disabled = state.status === "running" || state.status === "paused";
+  renderOverlay();
 }
 
 function formatStatus(status) {
@@ -194,15 +264,69 @@ function formatStatus(status) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+function renderOverlay() {
+  if (state.status === "running") {
+    overlayElement.classList.add("hidden");
+    return;
+  }
+
+  overlayElement.classList.remove("hidden");
+
+  if (state.status === "ready") {
+    overlayLabelElement.textContent = "Snake";
+    overlayTitleElement.textContent = "Classic Snake";
+    overlayTextElement.textContent =
+      `Difficulty: ${DIFFICULTY_LEVELS[difficulty].label}. Press start or use any direction key.`;
+    overlayButton.textContent = "Start Game";
+    return;
+  }
+
+  if (state.status === "paused") {
+    overlayLabelElement.textContent = "Paused";
+    overlayTitleElement.textContent = "Game Paused";
+    overlayTextElement.textContent =
+      "Press resume, Space, or a direction key to continue.";
+    overlayButton.textContent = "Resume Game";
+    return;
+  }
+
+  overlayLabelElement.textContent = "Game Over";
+  overlayTitleElement.textContent = "Round Over";
+  overlayTextElement.textContent =
+    `Final score: ${state.score}. Best score: ${bestScore}. Press restart to try again.`;
+  overlayButton.textContent = "Play Again";
+}
+
+function scheduleTick() {
+  window.clearTimeout(tickHandle);
+  tickHandle = window.setTimeout(runTick, DIFFICULTY_LEVELS[difficulty].tickMs);
+}
+
+function runTick() {
+  tick();
+  scheduleTick();
+}
+
+function startRunningFromReady() {
+  if (state.status !== "ready") {
+    return;
+  }
+
+  state = {
+    ...state,
+    status: "running",
+  };
+}
+
 function setDirection(direction) {
   const nextDirection = queueDirection(state, direction);
   const shouldPlayMoveSound =
     nextDirection !== state.pendingDirection || state.status === "ready";
 
+  startRunningFromReady();
   state = {
     ...state,
     pendingDirection: nextDirection,
-    status: state.status === "ready" ? "running" : state.status,
   };
 
   if (shouldPlayMoveSound) {
@@ -247,6 +371,51 @@ function handleRestart() {
   state = restartGame();
   playRestartSound();
   render();
+}
+
+function handleOverlayAction() {
+  unlockAudio();
+
+  if (state.status === "paused") {
+    handlePauseToggle();
+    return;
+  }
+
+  if (state.status === "game-over") {
+    handleRestart();
+    return;
+  }
+
+  startRunningFromReady();
+  render();
+}
+
+function handleDifficultyChange(nextDifficulty) {
+  if (!DIFFICULTY_LEVELS[nextDifficulty]) {
+    return;
+  }
+
+  difficulty = nextDifficulty;
+  saveSetting(STORAGE_KEYS.difficulty, difficulty);
+  scheduleTick();
+  render();
+}
+
+function handleSwipeDirection(startX, startY, endX, endY) {
+  const deltaX = endX - startX;
+  const deltaY = endY - startY;
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (distance < 24) {
+    return;
+  }
+
+  if (Math.abs(deltaX) > Math.abs(deltaY)) {
+    setDirection(deltaX > 0 ? "right" : "left");
+    return;
+  }
+
+  setDirection(deltaY > 0 ? "down" : "up");
 }
 
 document.addEventListener("keydown", (event) => {
@@ -294,18 +463,37 @@ document.addEventListener("pointerdown", unlockAudio, { passive: true });
 pauseButton.addEventListener("click", handlePauseToggle);
 
 restartButton.addEventListener("click", handleRestart);
+overlayButton.addEventListener("click", handleOverlayAction);
+
+difficultySelect.addEventListener("change", (event) => {
+  handleDifficultyChange(event.target.value);
+});
 
 soundButton.addEventListener("click", () => {
   soundEnabled = !soundEnabled;
+  saveSetting(STORAGE_KEYS.soundEnabled, soundEnabled);
   render();
 });
 
 controlButtons.forEach((button) => {
   button.addEventListener("click", () => {
+    unlockAudio();
     setDirection(button.dataset.direction);
   });
 });
 
+boardElement.addEventListener("touchstart", (event) => {
+  const touch = event.changedTouches[0];
+  touchStartX = touch.clientX;
+  touchStartY = touch.clientY;
+  unlockAudio();
+}, { passive: true });
+
+boardElement.addEventListener("touchend", (event) => {
+  const touch = event.changedTouches[0];
+  handleSwipeDirection(touchStartX, touchStartY, touch.clientX, touch.clientY);
+}, { passive: true });
+
 buildBoard();
 render();
-window.setInterval(tick, TICK_MS);
+scheduleTick();

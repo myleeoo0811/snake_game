@@ -60,6 +60,10 @@ body {
   font-weight: 700;
 }
 
+.board-shell {
+  position: relative;
+}
+
 .board {
   display: grid;
   grid-template-columns: repeat(16, minmax(0, 1fr));
@@ -86,10 +90,53 @@ body {
   background: var(--food);
 }
 
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(31, 36, 31, 0.42);
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay-card {
+  width: min(100%, 300px);
+  border: 2px solid var(--border);
+  background: rgba(255, 253, 248, 0.97);
+  padding: 20px;
+  text-align: center;
+  box-shadow: 6px 6px 0 rgba(47, 58, 46, 0.14);
+}
+
+.overlay-title {
+  margin: 0 0 10px;
+  font-size: 1.75rem;
+}
+
+.overlay-text {
+  margin: 0 0 16px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .hint {
   margin: 14px 0;
   color: var(--muted);
   font-size: 0.95rem;
+}
+
+.settings {
+  margin-bottom: 16px;
+}
+
+.setting {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .actions {
@@ -99,16 +146,25 @@ body {
   margin-bottom: 16px;
 }
 
+select,
 button {
   border: 2px solid var(--border);
   background: var(--button);
   color: var(--text);
-  padding: 10px 14px;
   font: inherit;
+}
+
+select {
+  padding: 10px 12px;
+}
+
+button {
+  padding: 10px 14px;
   cursor: pointer;
 }
 
-button:focus-visible {
+button:focus-visible,
+select:focus-visible {
   outline: 3px solid #8dad7d;
   outline-offset: 2px;
 }

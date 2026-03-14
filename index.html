@@ -15,22 +15,50 @@
             <p id="score" class="value">0</p>
           </div>
           <div>
+            <p class="label">Best</p>
+            <p id="best-score" class="value">0</p>
+          </div>
+          <div>
             <p class="label">Status</p>
             <p id="status" class="value">Ready</p>
           </div>
         </header>
 
-        <div
-          id="board"
-          class="board"
-          role="grid"
-          aria-label="Snake board"
-        ></div>
+        <div class="board-shell">
+          <div
+            id="board"
+            class="board"
+            role="grid"
+            aria-label="Snake board"
+          ></div>
+
+          <div id="overlay" class="overlay">
+            <div class="overlay-card">
+              <p id="overlay-label" class="label">Snake</p>
+              <h1 id="overlay-title" class="overlay-title">Classic Snake</h1>
+              <p id="overlay-text" class="overlay-text">
+                Pick a difficulty and press start.
+              </p>
+              <button id="overlay-button" type="button">Start Game</button>
+            </div>
+          </div>
+        </div>
 
         <p class="hint">
           Arrow keys or WASD to move. Press Space to pause. Press Enter to
           restart.
         </p>
+
+        <div class="settings">
+          <label class="setting" for="difficulty-select">
+            <span class="label">Difficulty</span>
+            <select id="difficulty-select">
+              <option value="easy">Easy</option>
+              <option value="normal">Normal</option>
+              <option value="hard">Hard</option>
+            </select>
+          </label>
+        </div>
 
         <div class="actions">
           <button id="pause-button" type="button">Pause</button>
