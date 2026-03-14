@@ -14,10 +14,12 @@ const scoreElement = document.querySelector("#score");
 const statusElement = document.querySelector("#status");
 const pauseButton = document.querySelector("#pause-button");
 const restartButton = document.querySelector("#restart-button");
+const soundButton = document.querySelector("#sound-button");
 const controlButtons = document.querySelectorAll("[data-direction]");
 
 let state = createInitialState();
 let audioContext;
+let soundEnabled = true;
 
 function getAudioContext() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -37,6 +39,10 @@ function getAudioContext() {
 }
 
 function playTone({ frequency, duration, type = "square", volume = 0.04, delay = 0 }) {
+  if (!soundEnabled) {
+    return;
+  }
+
   const context = getAudioContext();
   if (!context) {
     return;
@@ -72,6 +78,36 @@ function playEatSound() {
     type: "triangle",
     volume: 0.045,
     delay: 0.04,
+  });
+}
+
+function playPauseSound() {
+  playTone({ frequency: 340, duration: 0.06, type: "square", volume: 0.035 });
+}
+
+function playResumeSound() {
+  playTone({ frequency: 430, duration: 0.06, type: "square", volume: 0.035 });
+}
+
+function playRestartSound() {
+  playTone({ frequency: 390, duration: 0.05, type: "triangle", volume: 0.04 });
+  playTone({
+    frequency: 590,
+    duration: 0.08,
+    type: "triangle",
+    volume: 0.045,
+    delay: 0.05,
+  });
+}
+
+function playGameOverSound() {
+  playTone({ frequency: 240, duration: 0.12, type: "sawtooth", volume: 0.05 });
+  playTone({
+    frequency: 180,
+    duration: 0.18,
+    type: "sawtooth",
+    volume: 0.045,
+    delay: 0.08,
   });
 }
 
@@ -119,6 +155,8 @@ function render() {
   scoreElement.textContent = String(state.score);
   statusElement.textContent = formatStatus(state.status);
   pauseButton.textContent = state.status === "paused" ? "Resume" : "Pause";
+  soundButton.textContent = soundEnabled ? "Sound On" : "Sound Off";
+  soundButton.setAttribute("aria-pressed", String(soundEnabled));
 }
 
 function formatStatus(status) {
@@ -149,12 +187,38 @@ function setDirection(direction) {
 
 function tick() {
   const previousScore = state.score;
+  const previousStatus = state.status;
   state = stepGame(state);
 
   if (state.score > previousScore) {
     playEatSound();
   }
 
+  if (previousStatus !== "game-over" && state.status === "game-over") {
+    playGameOverSound();
+  }
+
+  render();
+}
+
+function handlePauseToggle() {
+  const nextState = togglePause(state);
+
+  if (nextState.status !== state.status) {
+    if (nextState.status === "paused") {
+      playPauseSound();
+    } else if (state.status === "paused" && nextState.status === "running") {
+      playResumeSound();
+    }
+  }
+
+  state = nextState;
+  render();
+}
+
+function handleRestart() {
+  state = restartGame();
+  playRestartSound();
   render();
 }
 
@@ -187,25 +251,22 @@ document.addEventListener("keydown", (event) => {
 
   if (key === " " || key === "p") {
     event.preventDefault();
-    state = togglePause(state);
-    render();
+    handlePauseToggle();
     return;
   }
 
   if (key === "enter") {
     event.preventDefault();
-    state = restartGame();
-    render();
+    handleRestart();
   }
 });
 
-pauseButton.addEventListener("click", () => {
-  state = togglePause(state);
-  render();
-});
+pauseButton.addEventListener("click", handlePauseToggle);
 
-restartButton.addEventListener("click", () => {
-  state = restartGame();
+restartButton.addEventListener("click", handleRestart);
+
+soundButton.addEventListener("click", () => {
+  soundEnabled = !soundEnabled;
   render();
 });
 
