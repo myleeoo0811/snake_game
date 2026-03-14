@@ -1,0 +1,18 @@
+[Unit]
+Description=Snake game server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/snake
+Environment=NODE_ENV=production
+Environment=HOST=0.0.0.0
+Environment=PORT=3000
+ExecStart=/usr/bin/node /var/www/snake/server.js
+Restart=always
+RestartSec=3
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
